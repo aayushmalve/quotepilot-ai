@@ -248,12 +248,11 @@ export default function Home() {
     y += 9;
 
     // Four-column item table
-    const descriptionWidth = columns.qty - columns.description - 8;
+    const descriptionWidth = 118 - columns.description;
     const qtyWidth = 12;
-    const rateWidth = 25;
-    const qtyX = columns.qty;
-    const rateX = columns.rate;
-    const amountX = columns.amount;
+    const qtyX = 126;
+    const rateRight = 163;
+    const amountX = right;
 
     const drawTableHeader = () => {
       ensureSpace(13);
@@ -263,8 +262,8 @@ export default function Home() {
       doc.setFontSize(8.5);
       doc.setTextColor(55, 65, 81);
       doc.text("DESCRIPTION", left + 2, y + 1);
-      doc.text("QTY", qtyX, y + 1);
-      doc.text("RATE", rateX, y + 1);
+      doc.text("QTY", qtyX + qtyWidth / 2, y + 1, { align: "center" });
+      doc.text("RATE", rateRight, y + 1, { align: "right" });
       doc.text("AMOUNT", amountX, y + 1, { align: "right" });
       doc.setTextColor(0, 0, 0);
       y += 9;
@@ -297,7 +296,7 @@ export default function Home() {
         align: "center",
       });
 
-      doc.text(pdfMoney(item.rate), rateX + rateWidth, y + 1, {
+      doc.text(pdfMoney(item.rate), rateRight, y + 1, {
         align: "right",
       });
 
