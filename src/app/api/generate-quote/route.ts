@@ -70,63 +70,130 @@ export async function POST(request: Request) {
   }
 
   try {
-    const upstream = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "X-Title": "QuotePilot AI",
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+    let content: string | null = null;
+    let lastFailure = "The AI provider returned an empty response.";
+    let lastStatus = 502;
+
+    // Two bounded attempts fit within the existing 30-second function limit.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const upstream = await fetch(
+          "https://openrouter.ai/api/v1/chat/completions",
           {
-            role: "user",
-            content:
-              `Create a draft quotation from these project notes. Currency: INR.\n\n` +
-              requestResult.data.notes,
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+              "X-Title": "QuotePilot AI",
+            },
+            body: JSON.stringify({
+              model,
+              temperature: 0.2,
+              messages: [
+                { role: "system", content: SYSTEM_PROMPT },
+                {
+                  role: "user",
+                  content:
+                    `Create a draft quotation from these project notes. Currency: INR.\\n\\n` +
+                    requestResult.data.notes,
+                },
+              ],
+              response_format: { type: "json_object" },
+            }),
+            signal: AbortSignal.timeout(11_000),
           },
-        ],
-        response_format: { type: "json_object" },
-      }),
-      signal: AbortSignal.timeout(25_000),
-    });
+        );
 
-    if (!upstream.ok) {
-      const providerError = (await upstream.text()).slice(0, 1500);
-      console.error(
-        "QuotePilot provider error:",
-        upstream.status,
-        providerError,
-      );
-      const message =
-        upstream.status === 429
-          ? "The selected free AI model is busy or rate-limited. Please retry shortly."
-          : upstream.status === 401 || upstream.status === 403
-            ? "The AI provider rejected the API credentials. Check your OpenRouter key."
-            : upstream.status === 404
-              ? "The configured AI model was not found. Check OPENROUTER_MODEL in .env.local."
-              : "The AI provider could not generate a quote. Please retry shortly.";
-      return NextResponse.json({ error: message }, { status: upstream.status === 429 ? 429 : 502 });
+        if (!upstream.ok) {
+          const providerError = (await upstream.text()).slice(0, 1000);
+          console.error(
+            "QuotePilot provider error:",
+            upstream.status,
+            providerError,
+          );
+
+          if (upstream.status === 401 || upstream.status === 403) {
+            return NextResponse.json(
+              { error: "The AI provider rejected the API credentials. Check your OpenRouter key." },
+              { status: 502 },
+            );
+          }
+
+          if (upstream.status === 404) {
+            return NextResponse.json(
+              { error: "The configured AI model was not found. Check OPENROUTER_MODEL." },
+              { status: 502 },
+            );
+          }
+
+          const retryable =
+            upstream.status === 429 || upstream.status >= 500;
+
+          if (retryable && attempt === 0) {
+            lastFailure =
+              upstream.status === 429
+                ? "The AI model is busy or rate-limited."
+                : "The AI provider is temporarily unavailable.";
+            lastStatus = upstream.status === 429 ? 429 : 502;
+            await new Promise((resolve) => setTimeout(resolve, 400));
+            continue;
+          }
+
+          return NextResponse.json(
+            {
+              error: upstream.status === 429
+                ? "The AI model is busy or rate-limited. Please retry shortly."
+                : "The AI provider could not generate a quotation. Please try again.",
+            },
+            { status: upstream.status === 429 ? 429 : 502 },
+          );
+        }
+
+        const result: unknown = await upstream.json();
+        const candidate =
+          typeof result === "object" &&
+          result !== null &&
+          "choices" in result &&
+          Array.isArray(result.choices) &&
+          typeof result.choices[0]?.message?.content === "string"
+            ? result.choices[0].message.content
+            : null;
+
+        if (candidate?.trim()) {
+          content = candidate;
+          break;
+        }
+
+        lastFailure = "The AI provider returned an empty response.";
+        lastStatus = 502;
+      } catch (error) {
+        const timedOut =
+          error instanceof Error && error.name === "TimeoutError";
+
+        lastFailure = timedOut
+          ? "The AI provider took too long to respond."
+          : "Could not connect to the AI provider.";
+        lastStatus = timedOut ? 504 : 502;
+
+        console.error(
+          "QuotePilot attempt failed:",
+          error instanceof Error ? error.name : "Unknown error",
+          "attempt:",
+          attempt + 1,
+        );
+      }
+
+      if (attempt === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      }
     }
-
-    const result: unknown = await upstream.json();
-
-    const content =
-      typeof result === "object" &&
-      result !== null &&
-      "choices" in result &&
-      Array.isArray(result.choices) &&
-      typeof result.choices[0]?.message?.content === "string"
-        ? result.choices[0].message.content
-        : null;
 
     if (!content) {
       return NextResponse.json(
-        { error: "The AI provider returned an empty response. Please retry." },
-        { status: 502 },
+        {
+          error: `${lastFailure} Please try again shortly.`,
+        },
+        { status: lastStatus },
       );
     }
 
