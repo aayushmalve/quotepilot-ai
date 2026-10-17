@@ -32,6 +32,14 @@ const money = (value: number) =>
     maximumFractionDigits: 2,
   }).format(value);
 
+
+// ASCII-only currency formatting for jsPDF's built-in Helvetica font.
+const pdfMoney = (value: number) =>
+  `INR ${new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)}`;
+
 export default function Home() {
   const [business, setBusiness] = useState("Your Studio");
   const [email, setEmail] = useState("hello@example.com");
@@ -193,18 +201,18 @@ export default function Home() {
 
     items.forEach((item) => {
       write(
-        `${item.description || "Service"} | Qty: ${item.quantity} | Rate: ${money(item.rate)} | ${money(item.quantity * item.rate)}`
+        `${item.description || "Service"} | Qty: ${item.quantity} | Rate: ${pdfMoney(item.rate)} | ${pdfMoney(item.quantity * item.rate)}`
       );
     });
 
     y += 5;
     doc.line(left, y, right, y);
     y += 9;
-    write(`Subtotal: ${money(subtotal)}`, 10);
-    write(`Discount (${discount}%): -${money(discountAmount)}`, 10);
-    write(`Tax (${tax}%): ${money(taxAmount)}`, 10);
+    write(`Subtotal: ${pdfMoney(subtotal)}`, 10);
+    write(`Discount (${discount}%): -${pdfMoney(discountAmount)}`, 10);
+    write(`Tax (${tax}%): ${pdfMoney(taxAmount)}`, 10);
     y += 2;
-    write(`TOTAL: ${money(total)}`, 15, true);
+    write(`TOTAL: ${pdfMoney(total)}`, 15, true);
     y += 7;
     write("PAYMENT TERMS", 10, true);
     write(terms || "As agreed with the client.");
