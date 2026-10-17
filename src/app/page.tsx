@@ -203,8 +203,8 @@ export default function Home() {
     };
 
     const drawRule = () => {
-      doc.setDrawColor(190, 198, 210);
-      doc.setLineWidth(0.45);
+      doc.setDrawColor(225, 229, 236);
+      doc.setLineWidth(0.25);
       doc.line(left, y, right, y);
     };
 
@@ -305,9 +305,9 @@ export default function Home() {
         align: "right",
       });
 
-      y += rowHeight;
+      y += rowHeight + 1;
       drawRule();
-      y += 4;
+      y += 5;
     });
 
     y += 4;
@@ -337,7 +337,8 @@ export default function Home() {
 
     const writeSection = (heading: string, body: string) => {
       const bodyLines = doc.splitTextToSize(body, contentWidth);
-      ensureSpace(12 + bodyLines.length * 5);
+      const estimatedHeight = 10 + (bodyLines.length * 6) + 8;
+      ensureSpace(estimatedHeight);
       y += writeText(heading, left, y, contentWidth, 10, true);
       y += 2;
       y += writeText(body, left, y, contentWidth, 10);
