@@ -54,6 +54,26 @@ After deployment, test AI generation, error handling, draft saving, and PDF expo
 
 Quotation drafts are stored in the browser's local storage when the user saves them. AI generation sends the project notes to the configured OpenRouter model provider. Do not enter sensitive client information unless you have permission to share it with that provider.
 
+## Open-weight AI
+
+QuotePilot uses the explicitly configured model `meta-llama/llama-3.2-3b-instruct:free` through
+OpenRouter to draft quotation line items and suggest indicative INR prices.
+The model can be changed using the server-side `OPENROUTER_MODEL`
+environment variable without changing the quotation UI.
+
+The application calculates subtotal, discounts, tax, and totals in code.
+AI-generated prices are estimates, not verified market rates, and must be
+reviewed before sending a quotation.
+
+### Limitations and privacy
+
+- Inference is hosted through OpenRouter; this is not an offline application.
+- Project notes are sent to the configured inference provider.
+- Do not submit sensitive client information without appropriate permission.
+- Free inference can be rate-limited or unavailable.
+- Review the model's license and acceptable-use terms before commercial use.
+
 ## License
 
-No license has been selected yet. Add a license before presenting the repository as open source.
+This project is licensed under the MIT License. See [LICENSE](./LICENSE).
+
