@@ -203,8 +203,8 @@ export default function Home() {
     };
 
     const drawRule = () => {
-      doc.setDrawColor(225, 229, 236);
-      doc.setLineWidth(0.25);
+      doc.setDrawColor(235, 238, 243);
+      doc.setLineWidth(0.15);
       doc.line(left, y, right, y);
     };
 
