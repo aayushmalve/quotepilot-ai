@@ -203,8 +203,8 @@ export default function Home() {
     };
 
     const drawRule = () => {
-      doc.setDrawColor(220, 224, 232);
-      doc.setLineWidth(0.3);
+      doc.setDrawColor(190, 198, 210);
+      doc.setLineWidth(0.45);
       doc.line(left, y, right, y);
     };
 
@@ -276,7 +276,9 @@ export default function Home() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9.5);
 
-      const description = (item.description || "Service").trim();
+      const description = (item.description || "Service")
+        .replace(/\s*\|\s*Qty\s*:.*/i, "")
+        .trim() || "Service";
       const descriptionLines = doc.splitTextToSize(
         description,
         descriptionWidth
