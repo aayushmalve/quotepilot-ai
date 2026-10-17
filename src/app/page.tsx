@@ -160,67 +160,195 @@ export default function Home() {
 
   function exportPdf() {
     const today = new Date();
-    const dueDate = new Date(today);
-    dueDate.setDate(today.getDate() + Math.max(0, Number(validDays) || 0));
+    const days = Math.max(0, Number(validDays) || 0);
+    const validUntil = new Date(today);
+    validUntil.setDate(validUntil.getDate() + days);
 
-    const doc = new jsPDF();
-    const left = 18;
-    const right = 192;
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const left = 16;
+    const right = pageWidth - 16;
+    const contentWidth = right - left;
+    const columns = {
+      description: left,
+      qty: 130,
+      rate: 151,
+      amount: right,
+    };
     let y = 20;
 
-    const write = (text: string, size = 10, bold = false) => {
-      doc.setFont("helvetica", bold ? "bold" : "normal");
-      doc.setFontSize(size);
-      const lines = doc.splitTextToSize(text, right - left);
-      if (y + lines.length * 6 > 278) {
+    const ensureSpace = (height: number) => {
+      if (y + height > pageHeight - 18) {
         doc.addPage();
         y = 20;
+        return true;
       }
-      doc.text(lines, left, y);
-      y += lines.length * 6;
+      return false;
     };
 
-    write(business || "Your Business", 21, true);
-    write(email, 9);
+    const writeText = (
+      value: string,
+      x: number,
+      top: number,
+      width: number,
+      size = 10,
+      bold = false
+    ) => {
+      doc.setFont("helvetica", bold ? "bold" : "normal");
+      doc.setFontSize(size);
+      const lines = doc.splitTextToSize(value, width);
+      doc.text(lines, x, top);
+      return lines.length * (size * 0.42 + 1.5);
+    };
+
+    const drawRule = () => {
+      doc.setDrawColor(220, 224, 232);
+      doc.setLineWidth(0.3);
+      doc.line(left, y, right, y);
+    };
+
+    const dateFormat = (date: Date) =>
+      date.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+
+    // Header
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.text(business || "Your Business", left, y);
     y += 7;
-    doc.setDrawColor(220, 224, 232);
-    doc.line(left, y, right, y);
-    y += 12;
-    write("QUOTATION", 16, true);
-    write(`${title}  |  ${quoteNo}`, 10);
-    write(`Date: ${new Date().toLocaleDateString("en-IN")}`);
-    write(`Valid until: ${new Date(Date.now() + Math.max(0, Number(validDays) || 0) * 86400000).toLocaleDateString("en-IN")}`);
-    y += 5;
-    write("PREPARED FOR", 9, true);
-    write(client || "Client name not provided", 12, true);
-    if (clientEmail) write(clientEmail, 10);
+
+    if (email) {
+      y += writeText(email, left, y, contentWidth, 9);
+    }
+
+    y += 3;
+    drawRule();
+    y += 10;
+
+    y += writeText("QUOTATION", left, y, contentWidth, 16, true);
+    y += 2;
+    y += writeText(`${title || "Project quotation"}  |  ${quoteNo || "QP-0001"}`, left, y, contentWidth, 10);
+    y += 2;
+    y += writeText(`Date: ${dateFormat(today)}`, left, y, contentWidth, 10);
+    y += 2;
+    y += writeText(`Valid until: ${dateFormat(validUntil)}`, left, y, contentWidth, 10);
     y += 7;
-    write("DESCRIPTION                         QTY          RATE             AMOUNT", 9, true);
-    doc.line(left, y, right, y);
-    y += 8;
+
+    y += writeText("PREPARED FOR", left, y, contentWidth, 9, true);
+    y += 1;
+    y += writeText(client || "Client name not provided", left, y, contentWidth, 12, true);
+    if (clientEmail) {
+      y += 2;
+      y += writeText(clientEmail, left, y, contentWidth, 10);
+    }
+    y += 9;
+
+    // Four-column item table
+    const descriptionWidth = columns.qty - columns.description - 8;
+    const qtyWidth = 12;
+    const rateWidth = 25;
+    const qtyX = columns.qty;
+    const rateX = columns.rate;
+    const amountX = columns.amount;
+
+    const drawTableHeader = () => {
+      ensureSpace(13);
+      doc.setFillColor(245, 247, 250);
+      doc.rect(left, y - 5, contentWidth, 10, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(55, 65, 81);
+      doc.text("DESCRIPTION", left + 2, y + 1);
+      doc.text("QTY", qtyX, y + 1);
+      doc.text("RATE", rateX, y + 1);
+      doc.text("AMOUNT", amountX, y + 1, { align: "right" });
+      doc.setTextColor(0, 0, 0);
+      y += 9;
+    };
+
+    drawTableHeader();
 
     items.forEach((item) => {
-      write(
-        `${item.description || "Service"} | Qty: ${item.quantity} | Rate: ${pdfMoney(item.rate)} | ${pdfMoney(item.quantity * item.rate)}`
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9.5);
+
+      const description = (item.description || "Service").trim();
+      const descriptionLines = doc.splitTextToSize(
+        description,
+        descriptionWidth
       );
+      const rowHeight = Math.max(9, descriptionLines.length * 4.5 + 4);
+
+      if (ensureSpace(rowHeight + 2)) {
+        drawTableHeader();
+      }
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9.5);
+      doc.text(descriptionLines, left + 2, y + 1);
+
+      doc.text(String(item.quantity), qtyX + qtyWidth / 2, y + 1, {
+        align: "center",
+      });
+
+      doc.text(pdfMoney(item.rate), rateX + rateWidth, y + 1, {
+        align: "right",
+      });
+
+      doc.setFont("helvetica", "bold");
+      doc.text(pdfMoney(item.quantity * item.rate), amountX, y + 1, {
+        align: "right",
+      });
+
+      y += rowHeight;
+      drawRule();
+      y += 4;
     });
 
-    y += 5;
-    doc.line(left, y, right, y);
-    y += 9;
-    write(`Subtotal: ${pdfMoney(subtotal)}`, 10);
-    write(`Discount (${discount}%): -${pdfMoney(discountAmount)}`, 10);
-    write(`Tax (${tax}%): ${pdfMoney(taxAmount)}`, 10);
-    y += 2;
-    write(`TOTAL: ${pdfMoney(total)}`, 15, true);
-    y += 7;
-    write("PAYMENT TERMS", 10, true);
-    write(terms || "As agreed with the client.");
     y += 4;
-    write("NOTES", 10, true);
-    write(notes || "No additional notes.");
+    const summaryRows = [
+      [`Subtotal`, pdfMoney(subtotal)],
+      [`Discount (${discount}%):`, `-${pdfMoney(discountAmount)}`],
+      [`Tax (${tax}%):`, pdfMoney(taxAmount)],
+    ];
+
+    summaryRows.forEach(([label, value]) => {
+      ensureSpace(8);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text(label, right - 65, y);
+      doc.text(value, right, y, { align: "right" });
+      y += 7;
+    });
+
+    ensureSpace(15);
+    drawRule();
+    y += 8;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.text("TOTAL", right - 65, y);
+    doc.text(pdfMoney(total), right, y, { align: "right" });
     y += 12;
-    write("Thank you for your business.", 10, true);
+
+    const writeSection = (heading: string, body: string) => {
+      const bodyLines = doc.splitTextToSize(body, contentWidth);
+      ensureSpace(12 + bodyLines.length * 5);
+      y += writeText(heading, left, y, contentWidth, 10, true);
+      y += 2;
+      y += writeText(body, left, y, contentWidth, 10);
+      y += 6;
+    };
+
+    writeSection("PAYMENT TERMS", terms || "As agreed with the client.");
+    writeSection("NOTES", notes || "No additional notes.");
+
+    ensureSpace(12);
+    y += 2;
+    writeText("Thank you for your business.", left, y, contentWidth, 10, true);
 
     doc.save(`${(quoteNo || "quotation").replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`);
   }
