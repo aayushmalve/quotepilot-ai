@@ -14,6 +14,17 @@ type Item = {
   rate: number;
 };
 
+type GeneratedQuote = {
+  title: string;
+  items: Array<{
+    description: string;
+    quantity: number;
+    rate: number;
+  }>;
+  terms: string;
+  notes: string;
+};
+
 const money = (value: number) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -40,6 +51,11 @@ export default function Home() {
   const [nextId, setNextId] = useState(3);
   const [activeTab, setActiveTab] = useState<"edit" | "preview">("edit");
   const [saved, setSaved] = useState(false);
+  const [aiNotes, setAiNotes] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [generatedQuote, setGeneratedQuote] =
+    useState<GeneratedQuote | null>(null);
 
   const subtotal = useMemo(
     () => items.reduce((sum, item) => sum + item.quantity * item.rate, 0),
@@ -49,9 +65,64 @@ export default function Home() {
   const taxable = Math.max(0, subtotal - discountAmount);
   const taxAmount = taxable * Math.min(100, Math.max(0, tax)) / 100;
   const total = taxable + taxAmount;
-  const today = new Date();
-  const dueDate = new Date(today);
-  dueDate.setDate(today.getDate() + Math.max(0, Number(validDays) || 0));
+
+  async function generateQuote() {
+    setAiError("");
+    setGeneratedQuote(null);
+
+    if (aiNotes.trim().length < 10) {
+      setAiError("Enter at least 10 characters describing the project.");
+      return;
+    }
+
+    setAiLoading(true);
+
+    try {
+      const response = await fetch("/api/generate-quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notes: aiNotes.trim(),
+          currency: "INR",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Quote generation failed.");
+      }
+
+      setGeneratedQuote(data.quote as GeneratedQuote);
+    } catch (error) {
+      setAiError(
+        error instanceof Error
+          ? error.message
+          : "Could not generate a quote. Please try again.",
+      );
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  function applyGeneratedQuote() {
+    if (!generatedQuote) return;
+
+    const newItems = generatedQuote.items.map((item, index) => ({
+      id: nextId + index,
+      description: item.description,
+      quantity: item.quantity,
+      rate: item.rate,
+    }));
+
+    setTitle(generatedQuote.title);
+    setItems(newItems);
+    setNextId(nextId + newItems.length);
+    setTerms(generatedQuote.terms);
+    setNotes(generatedQuote.notes);
+    setSaved(false);
+    setGeneratedQuote(null);
+  }
 
   function updateItem(id: number, key: keyof Item, value: string) {
     setItems((old) =>
@@ -80,6 +151,10 @@ export default function Home() {
   }
 
   function exportPdf() {
+    const today = new Date();
+    const dueDate = new Date(today);
+    dueDate.setDate(today.getDate() + Math.max(0, Number(validDays) || 0));
+
     const doc = new jsPDF();
     const left = 18;
     const right = 192;
@@ -105,8 +180,8 @@ export default function Home() {
     y += 12;
     write("QUOTATION", 16, true);
     write(`${title}  |  ${quoteNo}`, 10);
-    write(`Date: ${today.toLocaleDateString("en-IN")}`);
-    write(`Valid until: ${dueDate.toLocaleDateString("en-IN")}`);
+    write(`Date: ${new Date().toLocaleDateString("en-IN")}`);
+    write(`Valid until: ${new Date(Date.now() + Math.max(0, Number(validDays) || 0) * 86400000).toLocaleDateString("en-IN")}`);
     y += 5;
     write("PREPARED FOR", 9, true);
     write(client || "Client name not provided", 12, true);
@@ -218,10 +293,10 @@ export default function Home() {
             <Sparkles size={16} /> AI assistant
           </div>
           <p className="mt-2 text-xs leading-5 text-indigo-900/70">
-            Turn rough project notes into a structured quotation. AI integration is the next build step.
+            Turn rough project notes into a structured quotation. Generate editable quotation drafts and review suggested prices before sending.
           </p>
           <div className="mt-3 rounded-lg bg-white px-3 py-2 text-[11px] text-slate-500">
-            Model connection pending
+            AI generator available
           </div>
         </div>
       </aside>
@@ -283,6 +358,133 @@ export default function Home() {
 
           <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)]">
             <div id="editor" className={`space-y-5 ${activeTab === "preview" ? "hidden lg:block" : ""}`}>
+              <section className="rounded-2xl border border-indigo-200 bg-white p-5 sm:p-6">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="rounded-xl bg-indigo-50 p-2.5 text-indigo-600">
+                    <Sparkles size={19}/>
+                  </div>
+                  <div>
+                    <h2 className="font-semibold">Generate with AI</h2>
+                    <p className="text-xs text-slate-500">
+                      Turn project notes into editable quotation items.
+                    </p>
+                  </div>
+                </div>
+
+                <label className="block text-xs font-medium text-slate-600">
+                  Describe the client&apos;s requirements
+                </label>
+                <textarea
+                  value={aiNotes}
+                  onChange={(e) => setAiNotes(e.target.value)}
+                  rows={5}
+                  maxLength={8000}
+                  placeholder="Example: Build a 5-page business website. Client will provide the content. Include responsive design, contact form, testing and deployment. Budget ₹25,000."
+                  className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                />
+
+                <button
+                  type="button"
+                  onClick={generateQuote}
+                  disabled={aiLoading}
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Sparkles size={16}/>
+                  {aiLoading ? "Generating quotation..." : "Generate quote"}
+                </button>
+
+                {aiError && (
+                  <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                    {aiError}
+                  </p>
+                )}
+
+                {generatedQuote && (
+                  <div className="mt-5 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+                    <h3 className="font-semibold">{generatedQuote.title}</h3>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Review these suggestions before applying them.
+                    </p>
+
+                    <div className="mt-3 space-y-2">
+                      {generatedQuote.items.map((item, index) => (
+                        <div key={index} className="rounded-lg border border-slate-200 bg-white p-3">
+                          <div className="text-sm font-medium">{item.description}</div>
+                          <div className="mt-3 grid grid-cols-2 gap-3">
+                            <label className="text-xs text-slate-500">
+                              Quantity
+                              <input
+                                type="number"
+                                min="0.01"
+                                step="any"
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const quantity = Number(e.target.value);
+                                  setGeneratedQuote((old) => old ? {
+                                    ...old,
+                                    items: old.items.map((entry, i) =>
+                                      i === index ? { ...entry, quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1 } : entry
+                                    ),
+                                  } : old);
+                                }}
+                                className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-900"
+                              />
+                            </label>
+                            <label className="text-xs text-slate-500">
+                              Rate (₹) — editable estimate
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={item.rate}
+                                onChange={(e) => {
+                                  const rate = Number(e.target.value);
+                                  setGeneratedQuote((old) => old ? {
+                                    ...old,
+                                    items: old.items.map((entry, i) =>
+                                      i === index ? { ...entry, rate: Number.isFinite(rate) && rate >= 0 ? rate : 0 } : entry
+                                    ),
+                                  } : old);
+                                }}
+                                className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-900"
+                              />
+                            </label>
+                          </div>
+                          <div className="mt-2 text-xs text-slate-600">
+                            Line total: <strong>{money(item.quantity * item.rate)}</strong>
+                          </div>
+                          <div className="mt-1 text-xs text-amber-700">
+                            AI price suggestion — verify and edit before sending.
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <p className="mt-3 text-xs leading-5 text-slate-600">
+                      AI-generated suggestions may be inaccurate. Check descriptions,
+                      quantities, prices and terms before sending.
+                    </p>
+
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={applyGeneratedQuote}
+                        className="flex-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                      >
+                        Apply to quotation
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGeneratedQuote(null)}
+                        className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        Discard
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </section>
+
               <section id="business" className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
                 <div className="mb-5 flex items-center gap-3">
                   <div className="rounded-xl bg-indigo-50 p-2.5 text-indigo-600"><Settings2 size={19}/></div>
@@ -374,7 +576,7 @@ export default function Home() {
                   <h3 className="mt-1 break-words text-xl font-bold">{title || "Project quotation"}</h3>
                   <div className="mt-5 grid grid-cols-2 gap-3">
                     <div><div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Prepared for</div><div className="mt-1 break-words text-sm font-semibold">{client || "Client name"}</div><div className="mt-1 break-all text-xs text-slate-500">{clientEmail}</div></div>
-                    <div><div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Issue date</div><div className="mt-1 text-sm font-medium">{today.toLocaleDateString("en-IN")}</div><div className="mt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Valid until</div><div className="mt-1 text-sm font-medium">{dueDate.toLocaleDateString("en-IN")}</div></div>
+                    <div><div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Issue date</div><div className="mt-1 text-sm font-medium">Set on PDF export</div><div className="mt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Valid until</div><div className="mt-1 text-sm font-medium">{validDays} days after issue</div></div>
                   </div>
                   <div className="mt-7 overflow-hidden rounded-xl border border-slate-200">
                     <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 bg-slate-50 px-3 py-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500"><span>Description</span><span className="text-right">Amount</span></div>

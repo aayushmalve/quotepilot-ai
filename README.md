@@ -1,36 +1,59 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# QuotePilot AI
 
-## Getting Started
+QuotePilot turns freelancer project notes into editable quotations with AI-assisted line items, INR pricing suggestions, tax and discount calculations, browser-local drafts, and PDF export.
 
-First, run the development server:
+## Features
+
+- Generate draft quotation items from project notes using OpenRouter.
+- Edit AI-suggested quantities and rates before applying them.
+- Edit business and client details, quotation number, validity, services, tax, discount, payment terms, and notes.
+- Calculate totals in the application rather than relying on the model.
+- Save and reload a draft in the current browser.
+- Export a quotation as a PDF.
+
+AI-generated prices are estimates, not verified market rates. Review all amounts, tax treatment, scope, and payment terms before sending a quotation.
+
+## Requirements
+
+- Node.js compatible with the installed Next.js version
+- npm
+- An OpenRouter API key for AI generation
+
+## Local setup
+
+```bash
+npm install
+cp .env.example .env.local
+```
+
+Edit `.env.local` and set `OPENROUTER_API_KEY` to your own key. Do not commit `.env.local` or expose the key in client-side code. The default model setting uses OpenRouter's free-model router; model availability and rate limits can vary.
+
+Start development:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Checks
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npx tsc --noEmit
+npm run lint
+npm run build
+```
 
-## Learn More
+## Deployment
 
-To learn more about Next.js, take a look at the following resources:
+Deploy as a Next.js application on a compatible host such as Vercel. Import the repository, configure `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` as server-side environment variables, and deploy. Never use a `NEXT_PUBLIC_` prefix for the API key.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+After deployment, test AI generation, error handling, draft saving, and PDF export on the hosted site. Free model availability is not guaranteed.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Privacy
 
-## Deploy on Vercel
+Quotation drafts are stored in the browser's local storage when the user saves them. AI generation sends the project notes to the configured OpenRouter model provider. Do not enter sensitive client information unless you have permission to share it with that provider.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+No license has been selected yet. Add a license before presenting the repository as open source.
